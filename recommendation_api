@@ -1,0 +1,31 @@
+from flask import Flask, jsonify, request
+import firebase_admin
+from firebase_admin import credentials, firestore, auth
+from recsysm.recsysm import recommend_food 
+# recsysm.recsysm NAMA MODELNYA BROTHER JAN LUPA GANTI Sesuaikan dengan struktur folder MODEL
+
+app = Flask(__name__)
+
+# Initialize Firebase
+cred = credentials.Certificate("key.json")
+firebase_admin.initialize_app(cred)
+db = firestore.client()
+
+@app.route('/recommend', methods=['POST'])
+def recommend():
+    data = request.json  # Dapatkan data dari permintaan JSON
+
+    # Dapatkan informasi pengguna dari Firebase Authentication
+    user = auth.get_user_by_email(data.get('email'))
+    user_id = user.uid
+
+    # Dapatkan data pengguna dari Firestore
+    user_data = db.collection('users').document(user_id).get().to_dict()
+
+    # Proses data pengguna dan dapatkan rekomendasi makanan dari model
+    recommended_food = recommend_food(user_data)  # Gunakan fungsi dari model Anda
+
+    return jsonify({"recommendation": recommended_food})
+
+if __name__ == "__main__":
+    app.run(debug=True)
