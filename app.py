@@ -13,9 +13,8 @@ cred = credentials.Certificate("key.json")
 firebase_admin.initialize_app(cred)
 db = firestore.client()
 
-
 class RegistrationForm:
-    def __init__(self, email, password, name, phone, address, gender,
+    def _init_(self, email, password, name, phone, address, gender,
                  height, weight, allergies, weekly_budget, weight_goal):
         self.email = email
         self.password = password
@@ -28,7 +27,6 @@ class RegistrationForm:
         self.allergies = allergies
         self.weekly_budget = weekly_budget
         self.weight_goal = weight_goal
-
 
 @app.route('/register', methods=['POST'])
 def register():
@@ -52,11 +50,9 @@ def register():
     if validate_registration_form(form):
         # Hash password before storing it
         hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
-
         try:
             # Create user in Firebase Authentication
             auth.create_user(email=email, password=password)
-
             # Save user data in Firestore (add more fields if needed)
             user_ref = db.collection('users').document()
             user_ref.set({
@@ -72,15 +68,12 @@ def register():
                 'weekly_budget': weekly_budget,
                 'weight_goal': weight_goal,
             })
-
             return jsonify({"message": "Registrasi berhasil"})
         except auth.EmailAlreadyExistsError:
             return jsonify({"error": "Email sudah digunakan"}), 400
         except auth.AuthError as e:
             return jsonify({"error": str(e)}), 500
-
     return jsonify({"error": "Invalid input"}), 400
-
 
 def validate_registration_form(form):
     # Perform input validation here
@@ -91,34 +84,30 @@ def validate_registration_form(form):
         return False
     if not form.password or len(form.password) < 6:
         return False
+        return True
 
-    return True
-
+#LOGIN
 @app.route('/login', methods=['POST'])
 def login():
     data = request.json  # Get data from JSON request
-
     email = data.get('email')
     password = data.get('password')
 
     try:
         # Verify login credentials with Firebase Authentication
         user = auth.get_user_by_email(email)
-
         # Check if password is correct (using the actual stored hash)
         stored_hashed_password = db.collection('users').where('email', '==', email).get()[0].to_dict()['password']
         if bcrypt.check_password_hash(stored_hashed_password, password):
             return jsonify({"message": "Login berhasil"})
         else:
             return jsonify({"error": "Password salah"}), 401
-
     except auth.AuthError as e:
         return jsonify({"error": str(e)}), 401
     except IndexError:
         return jsonify({"error": "Email tidak ditemukan"}), 401
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 @app.route('/get_profile/<string:user_id>', methods=['GET'])
 def get_profile(user_id):
@@ -134,7 +123,6 @@ def get_profile(user_id):
     except Exception as e:
         print(f"Error: {str(e)}")
         return jsonify({"error": str(e)}), 500
-
 
 # Edit_profile
 @app.route('/edit_profile/<string:user_id>', methods=['POST'])
@@ -166,8 +154,6 @@ def edit_profile(user_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
-
 @app.route('/food_users', methods=['POST'])
 def add_food_users():
     data = request.json
@@ -195,8 +181,69 @@ def add_food_users():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
 
-if __name__ == '__main__':
+@app.route('/calculate_calories/<string:user_id>', methods=['POST'])
+def calculate_calories(user_id):
+    data = request.json
+
+    # Pastikan data yang dibutuhkan tersedia
+    if 'nama_makanan' not in data or 'jumlah_porsi' not in data:
+        return jsonify({"error": "Data tidak lengkap"}), 400
+
+    # Ambil nilai dari data JSON
+    nama_makanan = data['nama_makanan']
+    jumlah_porsi = float(data['jumlah_porsi'])
+
+    try:
+        # Dapatkan data makanan dari Firestore berdasarkan nama_makanan
+        food_data = db.collection('food_users').where('nama_makanan', '==', nama_makanan).stream()
+
+        # Convert hasil query menjadi list
+        food_data_list = list(food_data)
+
+        if not food_data_list:
+            return jsonify({"error": "Makanan tidak ditemukan"}), 404
+
+        # Ambil data makanan pertama (asumsi nama makanan unik)
+        food_data = food_data_list[0].to_dict()
+
+        # Ambil nilai-niali dari data makanan
+        kalori_per_porsi = food_data.get('jumlah_kalori', 0)  # Ubah sesuai nama kolom di Firestore
+        porsi = food_data.get('porsi', 0)  # Ubah sesuai nama kolom di Firestore
+        harga = food_data.get('harga', 0)  # Ubah sesuai nama kolom di Firestore
+
+        # Pastikan kalori_per_porsi memiliki tipe data numerik
+        if not isinstance(kalori_per_porsi, (int, float)):
+            return jsonify({"error": "Data kalori tidak valid"}), 500
+
+        # Hitung kalori berdasarkan jumlah porsi
+        total_kalori = kalori_per_porsi * jumlah_porsi
+
+        return jsonify({"total_kalori": total_kalori})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+if __name__ == '_main_':
     app.run(debug=True)
 
 
+@app.route('/logout', methods=['POST'])
+def logout():
+    data = request.json  # Get data from JSON request
+
+    user_id = data.get('user_id')  # Assuming 'user_id' is sent in the request
+
+    try:
+        # Revoke the user's session, forcing them to log in again
+        auth.revoke_refresh_tokens(user_id)
+
+        return jsonify({"message": "Logout berhasil"})
+    except auth.AuthError as e:
+        return jsonify({"error": str(e)}), 401
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+if __name__ == '_main_':
+    app.run(debug=True)

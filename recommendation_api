@@ -2,8 +2,7 @@ from flask import Flask, jsonify, request
 import firebase_admin
 from firebase_admin import credentials, firestore, auth
 from recsysm.recsysm import recommend_food 
-# recsysm.recsysm NAMA MODELNYA BROTHER JAN LUPA GANTI Sesuaikan dengan struktur folder MODEL
-
+# recsysm.recsysm NAMA MODELNYA
 app = Flask(__name__)
 
 # Initialize Firebase
