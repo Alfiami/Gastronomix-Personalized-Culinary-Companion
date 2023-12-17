@@ -4,11 +4,34 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import firebase_admin
 from firebase_admin import credentials, firestore, auth
 import re
-from rekomendasi_api.predict import get_recommendation
+from rekomendasi_api.models import get_recommendation
 import requests
+from rekomendasi_api.models import load_data_and_model, get_recommendation
+import joblib
+import pandas as pd
+import numpy as np
 
 app = Flask(__name__)
 bcrypt = Bcrypt()
+
+url_raw = 'https://raw.githubusercontent.com/Alfiami/Gastronomix-Personalized-Culinary-Companion/master/MachineLearning/Dataset/Dataset%2BHarga.xlsx'
+df = pd.read_excel(url_raw)
+
+# Load the KMeans model
+kmeans = joblib.load('model_kmeans.pkl')
+
+# Basic recommendations for each type of food
+basic_recommendations = {
+    'makanan pokok': 'Nasi Merah',
+    'makanan tambahan': 'Keripik Tempe',
+    'lauk': 'Tahu Telur',
+    'sayur': 'Bayam Kukus',
+    'buah': 'Semangka, segar',
+    'susu': 'Susu sapi, segar'
+}
+
+
+df, kmeans = load_data_and_model()
 
 # Initialize Firebase
 cred = credentials.Certificate("key.json")
@@ -109,21 +132,53 @@ def login():
         return jsonify({"error": str(e)}), 500
 
 # Route `/recommend`
-@app.route('/recommend', methods=['POST'])
-def recommend():
-    data = request.json  # Get data from JSON request
+@app.route('/recommend_food', methods=['POST'])
+def recommend_food():
+    data = request.json
 
-    # Get user information from Firebase Authentication
-    user = auth.get_user_by_email(data.get('email'))
-    user_id = user.uid
+    # Extract data from the request
+    berat_badan = data['berat_badan']
+    berat_badan_tujuan = data['berat_badan_tujuan']
+    budget_makan = data['budget_makan']
 
-    # Get user data from Firestore
-    user_data = db.collection('users').document(user_id).get().to_dict()
+    # Calculate the calorie needs based on the provided formula
+    kebutuhan_kalori = (15.3 * berat_badan + 679) * (berat_badan_tujuan / berat_badan)
 
-    # Process user data and get food recommendations from the function in `predict.py`
-    recommended_food = get_recommendation(user_data)
+    # Make predictions using the KMeans model
+    cluster = kmeans.predict([[kebutuhan_kalori, budget_makan]])[0]
+    cluster_data = df[kmeans.labels_ == cluster]
 
-    return jsonify({"recommendation": recommended_food})
+    # Define the list of food types
+    jenis_makanan = ['makanan pokok', 'makanan tambahan', 'lauk', 'susu', 'sayur', 'buah']
+
+    # Initialize a dictionary to store recommendations by food type
+    recommended_foods_dict = {}
+
+    # Iterate over each food type
+    for jenis in jenis_makanan:
+        jenis_data = cluster_data[cluster_data['jenis'] == jenis]
+
+        if not jenis_data.empty:
+            # Randomly select one recommended food for each type
+            recommended_food = np.random.choice(jenis_data['makanan'].tolist())
+        else:
+            # If no specific recommendation for the type, use basic recommendation
+            recommended_food = basic_recommendations[jenis]
+
+        # Store the recommendation in the dictionary
+        recommended_foods_dict[jenis] = recommended_food
+
+    # Return the recommendations as JSON
+    return jsonify({
+        "recommended_foods": recommended_foods_dict,
+        "kebutuhan_kalori": kebutuhan_kalori
+    })
+
+if __name__ == '__main__':
+    # Run the Flask application
+    app.run(debug=True)
+
+
 
 @app.route('/get_profile/<string:user_id>', methods=['GET'])
 def get_profile(user_id):
@@ -200,6 +255,8 @@ def add_food_users():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
     
 
 @app.route('/calculate_calories/<string:user_id>', methods=['POST'])
