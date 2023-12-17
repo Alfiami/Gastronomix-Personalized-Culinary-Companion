@@ -1,5 +1,5 @@
 # Gunakan image resmi Python
-FROM python:3.8
+FROM python:3.9.2
 
 # Atur direktori kerja
 WORKDIR /app
