@@ -14,4 +14,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Tambahkan entri poin untuk menjalankan aplikasi Flask
-CMD ["python", "app.py"]
+CMD ["flask", "run", "python", "app.py"]
