@@ -9,6 +9,10 @@ from datetime import datetime
 import joblib
 import pandas as pd
 import numpy as np
+from flask import jsonify
+import datetime
+from datetime import datetime
+
 
 app = Flask(__name__)
 bcrypt = Bcrypt()
@@ -188,44 +192,7 @@ def recommend_food(user_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
 
-@app.route('/save_recommendation', methods=['POST'])
-def save_recommendation():
-    data = request.json
-    user_id = data.get('user_id')
-
-    user_data = db.collection('users').document(user_id).get().to_dict()
-
-    if not user_data:
-        return jsonify({"error": "User not found"}), 404
-
-    recommended_foods = data.get('recommended_foods')
-    kebutuhan_kalori = data.get('kebutuhan_kalori')
-
-    now = datetime.now()
-    date_time = now.strftime("%Y-%m-%d %H:%M:%S")
-
-    recommendations_ref = db.collection('recommendations').document(user_id)
-    recommendations_ref.set({
-        'recommended_foods': recommended_foods,
-        'kebutuhan_kalori': kebutuhan_kalori,
-        'tanggal_simpan': date_time.split()[0],
-        'waktu_simpan': date_time.split()[1]
-    })
-
-    return jsonify({
-        "message": "Rekomendasi makanan berhasil disimpan"
-    })
-
-@app.route('/get_recommendation/<string:user_id>', methods=['GET'])
-def get_recommendation(user_id):
-    recommendations = db.collection('recommendations').document(user_id).get().to_dict()
-
-    if not recommendations:
-        return jsonify({"error": "Data not found"}), 404
-
-    return jsonify(recommendations), 200
 
 @app.route('/get_profile/<string:user_id>', methods=['GET'])
 def get_profile(user_id):
@@ -270,12 +237,12 @@ def edit_profile(user_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/food_users/<string:user_id>', methods=['POST'])
-def add_food_users(user_id):
+@app.route('/food_users', methods=['POST'])
+def add_food_users():
     data = request.json
 
-    required_fields = ['nama_makanan', 'jumlah_kalori', 'porsi', 'harga']
-    if not all(field in data for field in required_fields):
+    # Pastikan data yang dibutuhkan tersedia
+    if 'nama_makanan' not in data or 'jumlah_kalori' not in data or 'porsi' not in data or 'harga' not in data:
         return jsonify({"error": "Data tidak lengkap"}), 400
 
     name = data['nama_makanan']
@@ -284,25 +251,34 @@ def add_food_users(user_id):
     price = float(data['harga'])
     
     try:
-        now = datetime.now()
-        date_time = now.strftime("%Y-%m-%d %H:%M:%S")
+        date_time = datetime.datetime.now()
+
         doc_ref = db.collection('food_users').add({
-            'user_id': user_id,
             'nama_makanan': name,
             'jumlah_kalori': calories,
             'porsi': portion,
             'harga': price,
             'tanggal': date_time.split()[0],
             'jam': date_time.split()[1]
-        })
+            })
 
         return jsonify({"message": "Data makanan ditambahkan dengan sukses"}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/food_history/<string:user_id>', methods=['GET'])
-def get_food_history(user_id):
+@app.route('/calculate_calories/<string:user_id>', methods=['POST'])
+def calculate_calories(user_id):
+    data = request.json
+
+    # Pastikan data yang dibutuhkan tersedia
+    if 'nama_makanan' not in data or 'jumlah_porsi' not in data:
+        return jsonify({"error": "Data tidak lengkap"}), 400
+
+    # Ambil nilai dari data JSON
+    nama_makanan = data['nama_makanan']
+    jumlah_porsi = float(data['jumlah_porsi'])
+
     try:
         # Dapatkan data makanan dari Firestore berdasarkan user_id
         food_history = db.collection('food_users').where('user_id', '==', user_id).stream()
@@ -339,7 +315,7 @@ def get_food_history(user_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
+
 @app.route('/logout', methods=['POST'])
 def logout():
     data = request.json
