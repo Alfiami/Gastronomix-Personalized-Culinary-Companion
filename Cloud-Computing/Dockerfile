@@ -1,5 +1,5 @@
 # Gunakan image resmi Python
-FROM python:3.8
+FROM python:3.9.2
 
 # Atur direktori kerja
 WORKDIR /app
@@ -14,4 +14,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Tambahkan entri poin untuk menjalankan aplikasi Flask
-CMD ["flask", "run", "python", "app.py"]
+CMD ["python", "app.py"]

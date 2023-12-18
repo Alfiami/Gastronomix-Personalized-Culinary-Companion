@@ -10,6 +10,8 @@ from rekomendasi_api.models import load_data_and_model, get_recommendation
 import joblib
 import pandas as pd
 import numpy as np
+from flask import jsonify
+from datetime import datetime
 
 app = Flask(__name__)
 bcrypt = Bcrypt()
@@ -132,8 +134,8 @@ def login():
         return jsonify({"error": str(e)}), 500
 
 # Route `/recommend`
-@app.route('/recommend_food', methods=['POST'])
-def recommend_food():
+@app.route('/recommend_food/<string:user_id>', methods=['POST'])
+def recommend_food(user_id):
     data = request.json
 
     # Extract data from the request
@@ -173,12 +175,6 @@ def recommend_food():
         "recommended_foods": recommended_foods_dict,
         "kebutuhan_kalori": kebutuhan_kalori
     })
-
-if __name__ == '__main__':
-    # Run the Flask application
-    app.run(debug=True)
-
-
 
 @app.route('/get_profile/<string:user_id>', methods=['GET'])
 def get_profile(user_id):
@@ -227,13 +223,15 @@ def edit_profile(user_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-@app.route('/food_users', methods=['POST'])
-def add_food_users():
+    
+# input makanan user
+@app.route('/food_users/<string:user_id>', methods=['POST'])
+def add_food_users(user_id):
     data = request.json
 
     # Pastikan data yang dibutuhkan tersedia
-    if 'nama_makanan' not in data or 'jumlah_kalori' not in data or 'porsi' not in data or 'harga' not in data:
+    required_fields = ['nama_makanan', 'jumlah_kalori', 'porsi', 'harga']
+    if not all(field in data for field in required_fields):
         return jsonify({"error": "Data tidak lengkap"}), 400
 
     # Ambil nilai dari data JSON
@@ -244,11 +242,16 @@ def add_food_users():
     
     try:
         # Simpan data makanan ke Firestore
+        now = datetime.now()
+        date_time = now.strftime("%Y-%m-%d %H:%M:%S")
         doc_ref = db.collection('food_users').add({
+            'user_id': user_id,  # Tambahkan user_id
             'nama_makanan': name,
             'jumlah_kalori': calories,
             'porsi': portion,
-            'harga': price
+            'harga': price,
+            'tanggal': date_time.split()[0],
+            'jam': date_time.split()[1]
         })
 
         return jsonify({"message": "Data makanan ditambahkan dengan sukses"}), 200
@@ -256,51 +259,86 @@ def add_food_users():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
-    
-
-@app.route('/calculate_calories/<string:user_id>', methods=['POST'])
-def calculate_calories(user_id):
-    data = request.json
-
-    # Pastikan data yang dibutuhkan tersedia
-    if 'nama_makanan' not in data or 'jumlah_porsi' not in data:
-        return jsonify({"error": "Data tidak lengkap"}), 400
-
-    # Ambil nilai dari data JSON
-    nama_makanan = data['nama_makanan']
-    jumlah_porsi = float(data['jumlah_porsi'])
-
+# Riwayat Makan User
+@app.route('/food_history/<string:user_id>', methods=['GET'])
+def get_food_history(user_id):
     try:
-        # Dapatkan data makanan dari Firestore berdasarkan nama_makanan
-        food_data = db.collection('food_users').where('nama_makanan', '==', nama_makanan).stream()
+        # Dapatkan data makanan dari Firestore berdasarkan user_id
+        food_history = db.collection('food_users').where('user_id', '==', user_id).stream()
+
+        # Inisialisasi total kalori dan total harga
+        total_kalori = 0
+        total_harga = 0
 
         # Convert hasil query menjadi list
-        food_data_list = list(food_data)
+        food_history_list = [food.to_dict() for food in food_history]
 
-        if not food_data_list:
-            return jsonify({"error": "Makanan tidak ditemukan"}), 404
+        # Iterasi melalui riwayat makanan
+        for food_item in food_history_list:
+            total_kalori += food_item.get('jumlah_kalori', 0)
+            total_harga += food_item.get('harga', 0)
 
-        # Ambil data makanan pertama (asumsi nama makanan unik)
-        food_data = food_data_list[0].to_dict()
+        # Buat respons hanya dengan informasi yang diinginkan
+        response_data = {
+            "food_history": [
+                {
+                    "nama_makanan": food_item["nama_makanan"],
+                    "total_kalori": food_item["jumlah_kalori"],
+                    "total_harga": food_item["harga"],
+                    "tanggal": food_item["tanggal"],
+                    "jam": food_item["jam"]
+                }
+                for food_item in food_history_list
+            ],
+            "total_harga": total_harga,
+            "total_kalori": total_kalori
+        }
 
-        # Ambil nilai-niali dari data makanan
-        kalori_per_porsi = food_data.get('jumlah_kalori', 0)  # Ubah sesuai nama kolom di Firestore
-        porsi = food_data.get('porsi', 0)  # Ubah sesuai nama kolom di Firestore
-        harga = food_data.get('harga', 0)  # Ubah sesuai nama kolom di Firestore
-
-        # Pastikan kalori_per_porsi memiliki tipe data numerik
-        if not isinstance(kalori_per_porsi, (int, float)):
-            return jsonify({"error": "Data kalori tidak valid"}), 500
-
-        # Hitung kalori berdasarkan jumlah porsi
-        total_kalori = kalori_per_porsi * jumlah_porsi
-
-        return jsonify({"total_kalori": total_kalori})
+        return jsonify(response_data), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
+@app.route('/recommendation_history/<string:user_id>', methods=['GET'])
+def get_recommendation_history(user_id):
+    try:
+        # Dapatkan data rekomendasi dari Firestore berdasarkan user_id
+        recommendation_history = db.collection('food_recommendations').where('user_id', '==', user_id).stream()
+
+        # Inisialisasi total kalori dan total harga
+        total_kalori = 0
+        total_harga = 0
+
+        # Convert hasil query menjadi list
+        recommendation_history_list = [recommendation.to_dict() for recommendation in recommendation_history]
+
+        # Iterasi melalui riwayat rekomendasi
+        for recommendation_item in recommendation_history_list:
+            total_kalori += recommendation_item.get('kebutuhan_kalori', 0)
+            # total_harga += recommendation_item.get('total_harga', 0)  # Jika harga perlu dihitung, sesuaikan dengan struktur data rekomendasi
+
+        # Buat respons hanya dengan informasi yang diinginkan
+        response_data = {
+            "recommendation_history": [
+                {
+                    "recommended_foods": recommendation_item["recommended_foods"],
+                    "kebutuhan_kalori": recommendation_item["kebutuhan_kalori"],
+                    "timestamp": recommendation_item["timestamp"]
+                }
+                for recommendation_item in recommendation_history_list
+            ],
+            "total_kalori": total_kalori,
+            "total_harga": total_harga
+        }
+
+        return jsonify(response_data), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# Logout
 @app.route('/logout', methods=['POST'])
 def logout():
     data = request.json  # Get data from JSON request
