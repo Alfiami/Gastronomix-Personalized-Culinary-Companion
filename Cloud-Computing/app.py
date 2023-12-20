@@ -35,7 +35,7 @@ firebase_admin.initialize_app(cred)
 db = firestore.client()
 
 class RegistrationForm:
-    def _init_(self, email, password, name, gender,
+    def __init__(self, email, password, name, gender,
                  height, weight, allergies, weight_goal):
         self.email = email
         self.password = password
@@ -188,35 +188,53 @@ def recommend_food(user_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/save_recommendation/<string:user_id>', methods=['POST'])
+def save_recommendation(user_id):
+    try:
+        user_data = db.collection('users').document(user_id).get().to_dict()
+
+        if not user_data:
+            return jsonify({"error": "User not found"}), 404
+
+        berat_badan_tujuan = float(user_data.get('weight_goal', 0))
+
+        kebutuhan_kalori = (15.3 * float(user_data.get('weight', 0)) + 679) * (berat_badan_tujuan / float(user_data.get('weight', 0)))
+
+        cluster = kmeans.predict([[kebutuhan_kalori, 0]])[0]
+        cluster_data = df[kmeans.labels_ == cluster]
+
+        jenis_makanan = ['makanan pokok', 'makanan tambahan', 'lauk', 'susu', 'sayur', 'buah']
+        recommended_foods_dict = {}
+
+        for jenis in jenis_makanan:
+            jenis_data = cluster_data[cluster_data['jenis'] == jenis]
+
+            if not jenis_data.empty:
+                recommended_food = np.random.choice(jenis_data['makanan'].tolist())
+            else:
+                recommended_food = basic_recommendations[jenis]
+
+            recommended_foods_dict[jenis] = recommended_food
+
+        now = datetime.now()
+        date_time = now.strftime("%Y-%m-%d %H:%M:%S")
+
+        recommendations_ref = db.collection('recommendations').document(user_id)
+        recommendations_ref.set({
+            'recommended_foods': recommended_foods_dict,
+            'kebutuhan_kalori': kebutuhan_kalori,
+            'tanggal_simpan': date_time.split()[0],
+            'waktu_simpan': date_time.split()[1]
+        })
+
+        return jsonify({
+            "message": "Rekomendasi makanan berhasil disimpan"
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
     
-
-@app.route('/save_recommendation', methods=['POST'])
-def save_recommendation():
-    data = request.json
-    user_id = data.get('user_id')
-
-    user_data = db.collection('users').document(user_id).get().to_dict()
-
-    if not user_data:
-        return jsonify({"error": "User not found"}), 404
-
-    recommended_foods = data.get('recommended_foods')
-    kebutuhan_kalori = data.get('kebutuhan_kalori')
-
-    now = datetime.now()
-    date_time = now.strftime("%Y-%m-%d %H:%M:%S")
-
-    recommendations_ref = db.collection('recommendations').document(user_id)
-    recommendations_ref.set({
-        'recommended_foods': recommended_foods,
-        'kebutuhan_kalori': kebutuhan_kalori,
-        'tanggal_simpan': date_time.split()[0],
-        'waktu_simpan': date_time.split()[1]
-    })
-
-    return jsonify({
-        "message": "Rekomendasi makanan berhasil disimpan"
-    })
 
 @app.route('/get_recommendation/<string:user_id>', methods=['GET'])
 def get_recommendation(user_id):
@@ -340,6 +358,49 @@ def get_food_history(user_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
+@app.route('/get_recommendation_and_history/<string:user_id>', methods=['GET'])
+def get_recommendation_and_history(user_id):
+    try:
+        # Dapatkan rekomendasi dari Firestore
+        recommendations = db.collection('recommendations').document(user_id).get().to_dict()
+
+        # Dapatkan riwayat makanan dari Firestore
+        food_history = db.collection('food_users').where('user_id', '==', user_id).stream()
+
+        # Inisialisasi total kalori dan total harga
+        total_kalori = 0
+        total_harga = 0
+
+        # Convert hasil query makanan menjadi list
+        food_history_list = [food.to_dict() for food in food_history]
+
+        # Iterasi melalui riwayat makanan
+        for food_item in food_history_list:
+            total_kalori += food_item.get('jumlah_kalori', 0)
+            total_harga += food_item.get('harga', 0)
+
+        # Buat respons dengan informasi yang diinginkan
+        response_data = {
+            "recommendations": recommendations,
+            "food_history": [
+                {
+                    "nama_makanan": food_item["nama_makanan"],
+                    "total_kalori": food_item["jumlah_kalori"],
+                    "total_harga": food_item["harga"],
+                    "tanggal": food_item["tanggal"],
+                    "jam": food_item["jam"]
+                }
+                for food_item in food_history_list
+            ],
+            "total_harga": total_harga,
+            "total_kalori": total_kalori
+        }
+
+        return jsonify(response_data), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/logout', methods=['POST'])
 def logout():
     data = request.json
