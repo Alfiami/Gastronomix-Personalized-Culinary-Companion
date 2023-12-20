@@ -175,12 +175,6 @@ def recommend_food(user_id):
 
             recommended_foods_dict[jenis] = recommended_food
 
-        recommendations_ref = db.collection('recommendations').document(user_id)
-        recommendations_ref.set({
-            'recommended_foods': recommended_foods_dict,
-            'kebutuhan_kalori': kebutuhan_kalori
-        })
-
         return jsonify({
             "recommended_foods": recommended_foods_dict,
             "kebutuhan_kalori": kebutuhan_kalori
@@ -192,6 +186,11 @@ def recommend_food(user_id):
 @app.route('/save_recommendation/<string:user_id>', methods=['POST'])
 def save_recommendation(user_id):
     try:
+        data = request.json
+
+        if not data:
+            return jsonify({"error": "Invalid JSON data"}), 400
+
         user_data = db.collection('users').document(user_id).get().to_dict()
 
         if not user_data:
@@ -220,30 +219,26 @@ def save_recommendation(user_id):
         now = datetime.now()
         date_time = now.strftime("%Y-%m-%d %H:%M:%S")
 
-        recommendations_ref = db.collection('recommendations').document(user_id)
-        recommendations_ref.set({
-            'recommended_foods': recommended_foods_dict,
-            'kebutuhan_kalori': kebutuhan_kalori,
-            'tanggal_simpan': date_time.split()[0],
-            'waktu_simpan': date_time.split()[1]
-        })
+        # Check if the user has chosen to accept the recommendation
+        if data.get('accept_recommendation', False):
+            recommendations_ref = db.collection('recommendations').document(user_id)
+            recommendations_ref.set({
+                'recommended_foods': recommended_foods_dict,
+                'kebutuhan_kalori': kebutuhan_kalori,
+                'tanggal_simpan': date_time.split()[0],
+                'waktu_simpan': date_time.split()[1]
+            })
 
-        return jsonify({
-            "message": "Rekomendasi makanan berhasil disimpan"
-        })
+            return jsonify({
+                "message": "Rekomendasi makanan berhasil disimpan"
+            })
+        else:
+            return jsonify({
+                "message": "Rekomendasi makanan tidak disimpan"
+            })
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
-
-@app.route('/get_recommendation/<string:user_id>', methods=['GET'])
-def get_recommendation(user_id):
-    recommendations = db.collection('recommendations').document(user_id).get().to_dict()
-
-    if not recommendations:
-        return jsonify({"error": "Data not found"}), 404
-
-    return jsonify(recommendations), 200
 
 @app.route('/get_profile/<string:user_id>', methods=['GET'])
 def get_profile(user_id):
@@ -271,7 +266,7 @@ def get_profile(user_id):
 def edit_profile(user_id):
     data = request.json
 
-    weight = data.get('weight'),
+    weight = data.get('weight')
     weight_goal = data.get('weight_goal')
 
     try:
@@ -279,7 +274,7 @@ def edit_profile(user_id):
         if user_ref.get().exists:
             user_ref.update({
                 'weight': weight,
-                'weight_goal': weight_goal,
+                'weight_goal': weight_goal
             })
             return jsonify({"message": "Profil berhasil diubah"})
         else:
@@ -288,20 +283,24 @@ def edit_profile(user_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# Input makanan user
 @app.route('/food_users/<string:user_id>', methods=['POST'])
 def add_food_users(user_id):
     data = request.json
 
+    # Pastikan data yang dibutuhkan tersedia
     required_fields = ['nama_makanan', 'jumlah_kalori', 'porsi', 'harga']
     if not all(field in data for field in required_fields):
         return jsonify({"error": "Data tidak lengkap"}), 400
 
+    # Ambil nilai dari data JSON
     name = data['nama_makanan']
     calories = float(data['jumlah_kalori'])
     portion = float(data['porsi'])
     price = float(data['harga'])
     
     try:
+        # Simpan data makanan ke Firestore
         now = datetime.now()
         date_time = now.strftime("%Y-%m-%d %H:%M:%S")
         doc_ref = db.collection('food_users').add({
@@ -319,45 +318,7 @@ def add_food_users(user_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/food_history/<string:user_id>', methods=['GET'])
-def get_food_history(user_id):
-    try:
-        # Dapatkan data makanan dari Firestore berdasarkan user_id
-        food_history = db.collection('food_users').where('user_id', '==', user_id).stream()
-
-        # Inisialisasi total kalori dan total harga
-        total_kalori = 0
-        total_harga = 0
-
-        # Convert hasil query menjadi list
-        food_history_list = [food.to_dict() for food in food_history]
-
-        # Iterasi melalui riwayat makanan
-        for food_item in food_history_list:
-            total_kalori += food_item.get('jumlah_kalori', 0)
-            total_harga += food_item.get('harga', 0)
-
-        # Buat respons hanya dengan informasi yang diinginkan
-        response_data = {
-            "food_history": [
-                {
-                    "nama_makanan": food_item["nama_makanan"],
-                    "total_kalori": food_item["jumlah_kalori"],
-                    "total_harga": food_item["harga"],
-                    "tanggal": food_item["tanggal"],
-                    "jam": food_item["jam"]
-                }
-                for food_item in food_history_list
-            ],
-            "total_harga": total_harga,
-            "total_kalori": total_kalori
-        }
-
-        return jsonify(response_data), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    
+# Menampilkan Riwayat Rekomendasi dan input user   
 @app.route('/get_recommendation_and_history/<string:user_id>', methods=['GET'])
 def get_recommendation_and_history(user_id):
     try:
@@ -400,6 +361,7 @@ def get_recommendation_and_history(user_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 @app.route('/logout', methods=['POST'])
 def logout():
