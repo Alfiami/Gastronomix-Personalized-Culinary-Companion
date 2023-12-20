@@ -379,5 +379,24 @@ def logout():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/get_user_id', methods=['POST'])
+def get_user_id():
+    try:
+        data = request.json
+        email = data.get('email')
+
+        if not email:
+            return jsonify({"error": "Email is required"}), 400
+
+        user = auth.get_user_by_email(email)
+        user_id = user.uid
+
+        return jsonify({"user_id": user_id}), 200
+
+    except auth.AuthError as e:
+        return jsonify({"error": str(e)}), 401
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
