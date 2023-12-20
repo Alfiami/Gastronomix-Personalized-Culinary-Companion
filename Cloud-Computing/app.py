@@ -240,6 +240,7 @@ def save_recommendation(user_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 @app.route('/get_profile/<string:user_id>', methods=['GET'])
 def get_profile(user_id):
     try:
