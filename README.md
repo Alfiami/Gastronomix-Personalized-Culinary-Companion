@@ -8,6 +8,9 @@ Our project isn't just about suggesting what to eat; it's about helping students
 
 ## Hasil Rekomendasi
 ![Hasil Rekomendasi](https://drive.google.com/file/d/1saO4eGXo-LX1PhIQAM_ZLiuA_BYy9Epr/view?usp=sharing/hasilRekomendasi.jpg))
-![Nama Gambar](https://link_gambar_anda.com/gambar.png)
-![Nama Gambar](https://link_gambar_anda.com/gambar.png)
-![Nama Gambar](https://link_gambar_anda.com/gambar.png)
+
+![Hasil Rekomendasi](https://drive.google.com/file/d/1saO4eGXo-LX1PhIQAM_ZLiuA_BYy9Epr/view?usp=sharing/hasilRekomendasi.jpg))
+
+![Hasil Rekomendasi](https://drive.google.com/file/d/1saO4eGXo-LX1PhIQAM_ZLiuA_BYy9Epr/view?usp=sharing/hasilRekomendasi.jpg))
+
+![Hasil Rekomendasi](https://drive.google.com/file/d/1saO4eGXo-LX1PhIQAM_ZLiuA_BYy9Epr/view?usp=sharing/hasilRekomendasi.jpg))
