@@ -1,0 +1,11 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme. -->
+    <style name="Base.Theme.Gastronomix" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="windowSplashScreenBackground">@color/darkGreen</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/logo</item>
+        <item name="windowSplashScreenAnimationDuration">300</item>
+        <item name="postSplashScreenTheme">@style/Theme.Gastronomix</item>
+    </style>
+
+    <style name="Theme.Gastronomix" parent="Base.Theme.Gastronomix" />
+</resources>
